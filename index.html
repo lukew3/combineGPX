@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head lang="en">
+	<meta charset="utf-8">
+	<title>Combine GPX files</title>
+	<meta name="description" content="This is a tool that allows you to combine two sequential GPX files into one so that you can upload just one file to Strava. Select all files you want to merge using the file inputs below. If you have Garmin .fit files, upload them to Garmin Connect and then export to GPX.">
+	<meta name="author" content="Luke Weiler (lukew3)">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+	<h2>Combine GPX files</h2>
+	<p>This is a tool that allows you to combine two sequential GPX files into one so that you can upload just one file to Strava. Select all files you want to merge using the file inputs below. If you have Garmin .fit files, upload them to Garmin Connect and then export to GPX.</p>
+	<form id="mergeForm">
+		<label>File 1)</label>
+		<input id="fileUpload1" type="file" accept='.gpx'><br>
+		<label>File 2)</label>
+		<input id="fileUpload2" type="file" accept='.gpx'><br>
+		<input type="submit" value="Merge!"><br>
+	</form>
+	<script src="fileSaver.js"></script>
+	<script>
+		function $(domid) { return document.getElementById(domid); }
+		function getStartTime(lines) {
+			let time = undefined;
+			let cursor = 0;
+			while (!time && cursor < lines.length-1) {
+				let timeIndex = lines[cursor].indexOf('<time>');
+				if (timeIndex !== -1) {
+					let timeEndIndex = lines[cursor].indexOf('</time>');
+					time = lines[cursor].substring(timeIndex+6, timeEndIndex);
+				}
+				cursor++;
+			}
+			return time;
+		}
+		function concatLines(firstLines, nextLines) {
+			let cursor = 0;
+			let firstSplitIndex = undefined;
+			while (!firstSplitIndex) {
+				if (firstLines[cursor].includes('</trkseg>')) firstSplitIndex = cursor;
+				else cursor++;
+			}
+			let nextSplitIndex = undefined;
+			cursor = 0;
+			while (!nextSplitIndex) {
+				if (nextLines[cursor].includes('<trkseg>')) nextSplitIndex = cursor;
+				else cursor++;
+			}
+			return firstLines.slice(0, firstSplitIndex).concat(nextLines.slice(nextSplitIndex+1));
+		}
+		function buildNew(lines1, lines2) {
+			let lines = undefined
+			if (getStartTime(lines1) < getStartTime(lines2)) {
+				lines = concatLines(lines1, lines2);
+			} else {
+				lines = concatLines(lines2, lines1);
+			}
+			var blob = new Blob([lines.join('\n')], {type: 'application/gpx'});
+			// saveAs defined in fileSaver.js
+			saveAs(blob, "merge.gpx");
+		}
+		$('mergeForm').addEventListener('submit', (event) => {
+			event.preventDefault();
+			let files1 = $('fileUpload1').files;
+			let files2 = $('fileUpload2').files;
+			if (files1.length === 0 || files2.length === 0) return;
+			let reader1 = new FileReader();
+			let reader2 = new FileReader();
+			let lines1 = undefined;
+			let lines2 = undefined;
+			reader1.onload = (e) => {
+				const file = e.target.result;
+				lines1 = file.split(/\r\n|\n/);
+				if (lines2) buildNew(lines1, lines2);
+			}
+			reader2.onload = (e) => {
+				const file = e.target.result;
+				lines2 = file.split(/\r\n|\n/);
+				if (lines1) buildNew(lines1, lines2);
+			}
+			reader1.readAsText(files1[0]);
+			reader2.readAsText(files2[0]);
+		})
+	</script>
+</body>
+</html>
